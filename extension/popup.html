@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font: 13px system-ui, sans-serif; width: 280px; padding: 14px; color: #1a1a1a; }
+      h1 { font-size: 14px; margin: 0 0 10px; }
+      label { display: block; margin: 8px 0 4px; font-weight: 600; }
+      select, input { width: 100%; padding: 6px; font-size: 13px; box-sizing: border-box; }
+      .row { display: flex; gap: 6px; }
+      .row > * { flex: 1; }
+      button { width: 100%; padding: 9px; font-size: 14px; cursor: pointer; margin-top: 12px; border-radius: 6px; border: 1px solid #ccc; background: #fff; }
+      #toggle.recording { background: #b00020; color: #fff; border-color: #b00020; }
+      #toggle.idle { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+      #meetingsLink { margin-top: 12px; background: #f4f4f4; }
+      #status { margin-top: 10px; color: #444; min-height: 1.6em; white-space: pre-wrap; }
+      #status.err { color: #b00020; }
+      #elapsed { font-variant-numeric: tabular-nums; font-size: 22px; text-align: center; margin: 8px 0; }
+      .muted { color: #888; font-size: 11px; margin-top: 6px; }
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <h1>bugbodies — interview recorder</h1>
+
+    <div id="idleView">
+      <label for="companySelect">Company</label>
+      <select id="companySelect"></select>
+      <input id="companyNew" class="hidden" type="text" placeholder="Type a new company name" />
+    </div>
+
+    <div id="recordingView" class="hidden">
+      <div id="elapsed">00:00</div>
+      <div class="muted" id="recCompany"></div>
+    </div>
+
+    <button id="toggle" class="idle">Start recording</button>
+    <button id="meetingsLink">Open meetings</button>
+
+    <div id="status"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

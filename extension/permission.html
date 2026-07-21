@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font: 15px system-ui, sans-serif; max-width: 440px; margin: 60px auto; padding: 0 20px; color: #222; }
+      h1 { font-size: 18px; }
+      #status { margin-top: 16px; padding: 12px; border-radius: 6px; background: #f2f2f2; white-space: pre-wrap; }
+      #status.ok { background: #e6f4ea; color: #1e7e34; }
+      #status.err { background: #fdecea; color: #b00020; }
+      button { margin-top: 16px; padding: 8px 14px; font-size: 14px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <h1>Microphone access</h1>
+    <p>This grants the extension permission to use your microphone. A browser
+       prompt should appear — click <b>Allow</b>.</p>
+    <button id="retry">Request microphone</button>
+    <div id="status">Requesting…</div>
+    <script src="permission.js"></script>
+  </body>
+</html>

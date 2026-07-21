@@ -1,0 +1,15 @@
+# Recordings (real audio + transcripts live under the recordings root)
+/recordings/
+*.webm
+
+# Phase 0 test artifact
+/phase0-*.webm
+
+# Python / uv
+helper/.venv/
+__pycache__/
+*.pyc
+.python-version
+
+# faster-whisper / huggingface model cache
+.cache/

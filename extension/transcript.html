@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>bugbodies — transcript</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font: 15px/1.55 system-ui, sans-serif; max-width: 760px; margin: 32px auto; padding: 0 20px; color: #1a1a1a; }
+      header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+      h1 { font-size: 18px; margin: 0; }
+      .sub { color: #777; font-size: 13px; }
+      a.btn { font-size: 13px; padding: 6px 12px; border: 1px solid #bbb; border-radius: 6px; text-decoration: none; color: inherit; background: #fafafa; }
+      .line { display: flex; margin: 14px 0; gap: 10px; }
+      .line .ts { color: #999; font-size: 12px; font-variant-numeric: tabular-nums; min-width: 62px; padding-top: 3px; }
+      .bubble { padding: 8px 12px; border-radius: 10px; max-width: 78%; }
+      .speaker { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; opacity: .7; }
+      .You { justify-content: flex-end; }
+      .You .bubble { background: #1a73e8; color: #fff; }
+      .You .ts { order: 2; text-align: right; }
+      .Interviewer .bubble { background: #eceff3; color: #1a1a1a; }
+      #status { color: #777; }
+      .err { color: #b00020; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1 id="title">Transcript</h1>
+        <div class="sub" id="sub"></div>
+      </div>
+      <a id="export" class="btn" href="#">Export .txt</a>
+    </header>
+    <div id="status">Loading…</div>
+    <div id="lines"></div>
+    <script src="transcript.js"></script>
+  </body>
+</html>

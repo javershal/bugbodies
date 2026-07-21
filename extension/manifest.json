@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "bugbodies — interview note-taker",
+  "version": "1.0.0",
+  "description": "Records browser-based interviews as two tracks (mic + tab) and hands them to a local helper for Whisper transcription.",
+  "permissions": ["tabCapture", "offscreen", "storage", "tabs", "activeTab", "downloads"],
+  "host_permissions": ["http://localhost/*"],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
