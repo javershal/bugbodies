@@ -11,8 +11,9 @@ talks the other track is silent and Whisper hallucinates over silence.
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from . import config, store
 
@@ -55,14 +56,25 @@ def _ensure_wav(src: Path) -> Path:
     return wav
 
 
-def _transcribe_track(path: Path, speaker: str, offset_ms: float) -> list[dict]:
-    """Transcribe one track, returning labeled, offset-applied segments."""
+def _transcribe_track(
+    path: Path,
+    speaker: str,
+    offset_ms: float,
+    on_progress: Optional[Callable[[float], None]] = None,
+) -> list[dict]:
+    """Transcribe one track, returning labeled, offset-applied segments.
+
+    ``on_progress`` (if given) is called with this track's fraction done
+    (0.0–1.0), derived from each segment's end time vs the track duration.
+    """
     if not path.exists():
         return []
     model = _get_model()
     wav = _ensure_wav(path)
     try:
-        segments, _info = model.transcribe(
+        # ``info.duration`` is the total audio length; each seg.end tells us how
+        # far in we are, so seg.end / duration is the fraction transcribed.
+        segments, info = model.transcribe(
             str(wav),
             language="en",
             vad_filter=True,
@@ -72,9 +84,12 @@ def _transcribe_track(path: Path, speaker: str, offset_ms: float) -> list[dict]:
             log_prob_threshold=-1.0,
             condition_on_previous_text=False,
         )
+        duration = getattr(info, "duration", 0.0) or 0.0
         out = []
         shift = offset_ms / 1000.0
         for seg in segments:
+            if on_progress and duration > 0:
+                on_progress(min(seg.end / duration, 1.0))
             text = (seg.text or "").strip()
             if not text:
                 continue
@@ -86,6 +101,8 @@ def _transcribe_track(path: Path, speaker: str, offset_ms: float) -> list[dict]:
                     "text": text,
                 }
             )
+        if on_progress:
+            on_progress(1.0)
         return out
     finally:
         wav.unlink(missing_ok=True)
@@ -119,12 +136,34 @@ def process_dir(d: Path, meeting_id: Optional[str] = None) -> dict:
     try:
         store.set_status(mid, "processing")
 
+        # Throttled progress writer: set_status/set_progress do a full
+        # read-modify-write of meta.json, so we don't want one per segment.
+        # Write on any stage change or at most ~every 2s.
+        last = {"t": 0.0, "stage": None}
+
+        def report(progress: float, stage: str) -> None:
+            now = time.monotonic()
+            if stage != last["stage"] or now - last["t"] >= 2.0:
+                last["t"] = now
+                last["stage"] = stage
+                store.set_progress(mid, progress, stage)
+
+        # Two tracks, transcribed in sequence → each owns half the bar.
+        off = store.offset_ms(meta)
         # Positive offset shifts the mic timeline; apply the negative side to
         # tab so both land on a common origin. We anchor on the tab timeline:
         # mic segments shift by (mic_started - tab_started).
-        off = store.offset_ms(meta)
-        mic_segments = _transcribe_track(d / "mic.webm", "You", off)
-        tab_segments = _transcribe_track(d / "tab.webm", "Interviewer", 0.0)
+        report(0.0, "transcribing you")
+        mic_segments = _transcribe_track(
+            d / "mic.webm", "You", off,
+            on_progress=lambda f: report(f * 0.5, "transcribing you"),
+        )
+        report(0.5, "transcribing interviewer")
+        tab_segments = _transcribe_track(
+            d / "tab.webm", "Interviewer", 0.0,
+            on_progress=lambda f: report(0.5 + f * 0.5, "transcribing interviewer"),
+        )
+        report(1.0, "merging")
 
         merged = mic_segments + tab_segments
         merged.sort(key=lambda s: (s["start"], s["end"]))

@@ -98,7 +98,23 @@ def update_meta(meeting_id: str, **changes) -> dict:
 def set_status(meeting_id: str, status: str, error: Optional[str] = None) -> dict:
     if status not in VALID_STATUSES:
         raise ValueError(f"Bad status: {status}")
-    return update_meta(meeting_id, status=status, error=error)
+    changes = {"status": status, "error": error}
+    # Progress only means something mid-run: zero it entering "processing",
+    # peg it full on "complete". Leave it untouched on "error" so the UI can
+    # show how far it got.
+    if status == "processing":
+        changes["progress"] = 0.0
+        changes["stage"] = None
+    elif status == "complete":
+        changes["progress"] = 1.0
+        changes["stage"] = None
+    return update_meta(meeting_id, **changes)
+
+
+def set_progress(meeting_id: str, progress: float, stage: Optional[str] = None) -> dict:
+    """Record fractional transcription progress (0.0–1.0) + a stage label."""
+    progress = max(0.0, min(1.0, float(progress)))
+    return update_meta(meeting_id, progress=round(progress, 3), stage=stage)
 
 
 def create_meeting(company: str, started_at: Optional[str]) -> dict:
@@ -126,6 +142,8 @@ def create_meeting(company: str, started_at: Optional[str]) -> dict:
         "status": "recorded",
         "error": None,
         "has_tracks": False,
+        "progress": None,
+        "stage": None,
     }
     write_meta(d, meta)
     return meta

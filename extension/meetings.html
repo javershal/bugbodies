@@ -22,6 +22,12 @@
       #banner { padding: 10px; border-radius: 6px; background: #fdecea; color: #b00020; margin-bottom: 16px; }
       .hidden { display: none; }
       .err-msg { color: #b00020; font-size: 12px; width: 100%; }
+      .progress-wrap { width: 100%; }
+      .progress { height: 6px; background: #f0e6d0; border-radius: 3px; overflow: hidden; margin-top: 4px; }
+      .progress .bar { height: 100%; background: #f0a500; transition: width .4s ease; }
+      .progress.indeterminate .bar { width: 40% !important; border-radius: 3px; animation: indet 1.2s ease-in-out infinite; }
+      @keyframes indet { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+      .progress-label { font-size: 11px; color: #8a5a00; text-transform: capitalize; margin-top: 3px; }
     </style>
   </head>
   <body>

@@ -65,6 +65,29 @@ async function reassign(id) {
   }
 }
 
+function progressBar(m) {
+  // Full-width element that wraps to its own line under the row.
+  const wrap = document.createElement("div");
+  wrap.className = "progress-wrap";
+
+  const pct = typeof m.progress === "number" ? Math.round(m.progress * 100) : null;
+  const track = document.createElement("div");
+  track.className = "progress" + (pct == null ? " indeterminate" : "");
+  const bar = document.createElement("div");
+  bar.className = "bar";
+  bar.style.width = pct == null ? "100%" : pct + "%";
+  track.append(bar);
+
+  const label = document.createElement("div");
+  label.className = "progress-label";
+  label.textContent =
+    [m.stage, pct == null ? null : pct + "%"].filter(Boolean).join(" · ") ||
+    "starting…";
+
+  wrap.append(track, label);
+  return wrap;
+}
+
 function meetingRow(m) {
   const row = document.createElement("div");
   row.className = "meeting";
@@ -92,6 +115,7 @@ function meetingRow(m) {
     p.onclick = () => process(m.id, p);
     row.append(p);
   }
+  if (m.status === "processing") row.append(progressBar(m));
   if (m.status === "complete") {
     const view = document.createElement("a");
     view.className = "btn";
