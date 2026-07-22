@@ -91,8 +91,9 @@ async def upload_tracks(
 
 
 @app.post("/meetings/{meeting_id:path}/process")
-async def process_meeting(meeting_id: str):
+async def process_meeting(meeting_id: str, split_gap_ms: float | None = None):
     import asyncio
+    from functools import partial
 
     mid = _decode_id(meeting_id)
     try:
@@ -100,7 +101,20 @@ async def process_meeting(meeting_id: str):
     except (ValueError, FileNotFoundError) as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     # Run the CPU-heavy pipeline off the event loop; return immediately.
-    asyncio.get_event_loop().run_in_executor(None, pipeline.process_meeting, mid)
+    # split_gap_ms (dev-mode override) is threaded to the re-segmentation step.
+    asyncio.get_event_loop().run_in_executor(
+        None, partial(pipeline.process_meeting, mid, split_gap_ms=split_gap_ms)
+    )
+    return meta
+
+
+@app.delete("/meetings/{meeting_id:path}/transcript")
+def delete_transcript(meeting_id: str):
+    mid = _decode_id(meeting_id)
+    try:
+        meta = store.delete_transcript(mid)
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     return meta
 
 

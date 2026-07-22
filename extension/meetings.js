@@ -6,6 +6,51 @@ const listEl = document.getElementById("list");
 const bannerEl = document.getElementById("banner");
 let base = "http://localhost:8137";
 let pollTimer = null;
+let lastMeetings = [];
+
+// Developer mode: persisted advanced controls (split gap, reprocess, delete).
+const DEFAULT_SPLIT_GAP = 700;
+let devMode = false;
+let splitGapMs = DEFAULT_SPLIT_GAP;
+
+async function loadDevSettings() {
+  const s = await chrome.storage.local.get(["devMode", "splitGapMs"]);
+  devMode = !!s.devMode;
+  splitGapMs =
+    typeof s.splitGapMs === "number" && s.splitGapMs >= 0
+      ? s.splitGapMs
+      : DEFAULT_SPLIT_GAP;
+}
+
+function setupDevBar() {
+  const toggle = document.getElementById("devToggle");
+  const panel = document.getElementById("devpanel");
+  const gapInput = document.getElementById("splitGap");
+  const reset = document.getElementById("splitGapReset");
+
+  toggle.checked = devMode;
+  panel.classList.toggle("hidden", !devMode);
+  gapInput.value = splitGapMs;
+
+  toggle.addEventListener("change", async () => {
+    devMode = toggle.checked;
+    panel.classList.toggle("hidden", !devMode);
+    await chrome.storage.local.set({ devMode });
+    render(lastMeetings); // show/hide per-row dev controls
+  });
+
+  const saveGap = async () => {
+    const v = parseInt(gapInput.value, 10);
+    splitGapMs = Number.isFinite(v) && v >= 0 ? v : DEFAULT_SPLIT_GAP;
+    gapInput.value = splitGapMs;
+    await chrome.storage.local.set({ splitGapMs });
+  };
+  gapInput.addEventListener("change", saveGap);
+  reset.addEventListener("click", async () => {
+    gapInput.value = DEFAULT_SPLIT_GAP;
+    await saveGap();
+  });
+}
 
 async function getBase() {
   const res = await chrome.runtime.sendMessage({ type: "GET_HELPER_BASE" });
@@ -38,15 +83,36 @@ async function api(path, opts) {
 }
 
 async function process(id, btn) {
+  const label = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Processing…";
   try {
-    await api(`/meetings/${encodeURIComponent(id)}/process`, { method: "POST" });
+    // In dev mode, pass the chosen split gap; otherwise the helper's default.
+    const q = devMode ? `?split_gap_ms=${encodeURIComponent(splitGapMs)}` : "";
+    await api(`/meetings/${encodeURIComponent(id)}/process${q}`, { method: "POST" });
     startPolling();
   } catch (e) {
     banner("Process failed: " + e.message);
     btn.disabled = false;
-    btn.textContent = "Process";
+    btn.textContent = label;
+  }
+}
+
+async function deleteTranscript(id) {
+  if (
+    !confirm(
+      "Delete this transcript?\n\nThe mic/tab recordings are kept — you can " +
+        "reprocess afterward. This only removes transcript.json/.txt."
+    )
+  )
+    return;
+  try {
+    await api(`/meetings/${encodeURIComponent(id)}/transcript`, {
+      method: "DELETE",
+    });
+    load();
+  } catch (e) {
+    banner("Delete transcript failed: " + e.message);
   }
 }
 
@@ -135,6 +201,25 @@ function meetingRow(m) {
   re.onclick = () => reassign(m.id);
   row.append(re);
 
+  // Developer-mode advanced actions on already-processed meetings.
+  if (devMode && (m.status === "complete" || m.status === "error")) {
+    const tag = document.createElement("span");
+    tag.className = "dev-row-tag";
+    tag.textContent = `gap ${splitGapMs}ms`;
+
+    const reproc = document.createElement("button");
+    reproc.textContent = "Reprocess";
+    reproc.title = `Re-run transcription with split gap = ${splitGapMs}ms`;
+    reproc.onclick = () => process(m.id, reproc);
+
+    const del = document.createElement("button");
+    del.className = "danger";
+    del.textContent = "Delete transcript";
+    del.onclick = () => deleteTranscript(m.id);
+
+    row.append(tag, reproc, del);
+  }
+
   if (m.status === "error" && m.error) {
     const err = document.createElement("div");
     err.className = "err-msg";
@@ -157,6 +242,7 @@ async function load() {
 }
 
 function render(meetings) {
+  lastMeetings = meetings;
   listEl.innerHTML = "";
   if (meetings.length === 0) {
     listEl.textContent = "No meetings yet.";
@@ -188,5 +274,7 @@ function stopPolling() {
 
 (async () => {
   base = await getBase();
+  await loadDevSettings();
+  setupDevBar();
   load();
 })();

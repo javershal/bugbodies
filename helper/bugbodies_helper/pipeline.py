@@ -61,11 +61,14 @@ def _transcribe_track(
     speaker: str,
     offset_ms: float,
     on_progress: Optional[Callable[[float], None]] = None,
+    split_gap_ms: Optional[float] = None,
 ) -> list[dict]:
     """Transcribe one track, returning labeled, offset-applied segments.
 
     ``on_progress`` (if given) is called with this track's fraction done
     (0.0–1.0), derived from each segment's end time vs the track duration.
+    ``split_gap_ms`` overrides ``config.SPLIT_GAP_MS`` for this run (see
+    _grouped); ``None`` falls back to the configured default.
     """
     if not path.exists():
         return []
@@ -83,29 +86,58 @@ def _transcribe_track(
             no_speech_threshold=0.6,
             log_prob_threshold=-1.0,
             condition_on_previous_text=False,
+            # Per-word times let us re-split a segment on pauses (see _grouped),
+            # so back-and-forth interleaves instead of gluing into one line.
+            word_timestamps=True,
         )
         duration = getattr(info, "duration", 0.0) or 0.0
         out = []
         shift = offset_ms / 1000.0
+        gap_ms = config.SPLIT_GAP_MS if split_gap_ms is None else split_gap_ms
+        gap = gap_ms / 1000.0
         for seg in segments:
             if on_progress and duration > 0:
                 on_progress(min(seg.end / duration, 1.0))
-            text = (seg.text or "").strip()
-            if not text:
-                continue
-            out.append(
-                {
-                    "speaker": speaker,
-                    "start": round(seg.start + shift, 3),
-                    "end": round(seg.end + shift, 3),
-                    "text": text,
-                }
-            )
+            for start, end, raw in _grouped(seg, gap):
+                text = raw.strip()
+                if not text:
+                    continue
+                out.append(
+                    {
+                        "speaker": speaker,
+                        "start": round(start + shift, 3),
+                        "end": round(end + shift, 3),
+                        "text": text,
+                    }
+                )
         if on_progress:
             on_progress(1.0)
         return out
     finally:
         wav.unlink(missing_ok=True)
+
+
+def _grouped(seg, gap_s: float):
+    """Yield ``(start, end, text)`` chunks for one Whisper segment.
+
+    Split wherever the pause between two consecutive words is >= ``gap_s`` — on a
+    single track that pause usually means the *other* person was talking, so
+    breaking there gives each utterance its own timestamp and lets the merge
+    interleave the back-and-forth. Falls back to the whole segment when word
+    timestamps are unavailable or splitting is disabled (``gap_s <= 0``).
+    """
+    words = getattr(seg, "words", None) or []
+    if gap_s <= 0 or not words:
+        yield seg.start, seg.end, (seg.text or "")
+        return
+    group = [words[0]]
+    for w in words[1:]:
+        if w.start - group[-1].end >= gap_s:
+            yield group[0].start, group[-1].end, "".join(x.word for x in group)
+            group = [w]
+        else:
+            group.append(w)
+    yield group[0].start, group[-1].end, "".join(x.word for x in group)
 
 
 def _fmt_ts(seconds: float) -> str:
@@ -121,18 +153,28 @@ def render_txt(segments: list[dict]) -> str:
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def process_meeting(meeting_id: str) -> dict:
+def process_meeting(meeting_id: str, split_gap_ms: Optional[float] = None) -> dict:
     """Run the full pipeline on one meeting id. Sets status transitions."""
     d = store.meeting_dir(meeting_id)
-    return process_dir(d, meeting_id=meeting_id)
+    return process_dir(d, meeting_id=meeting_id, split_gap_ms=split_gap_ms)
 
 
-def process_dir(d: Path, meeting_id: Optional[str] = None) -> dict:
-    """Run the pipeline on a folder path (used by both HTTP and CLI)."""
+def process_dir(
+    d: Path,
+    meeting_id: Optional[str] = None,
+    split_gap_ms: Optional[float] = None,
+) -> dict:
+    """Run the pipeline on a folder path (used by both HTTP and CLI).
+
+    ``split_gap_ms`` overrides ``config.SPLIT_GAP_MS`` for this run.
+    """
     import json
 
     meta = store.read_meta(d)
-    mid = meeting_id or meta.get("id")
+    # Fallback-saved meetings (helper was down at record time) have no "id" in
+    # meta.json, and the `process` CLI passes none — derive it from the folder
+    # so status/progress writes resolve. id == "<Company>/<Date>" under ROOT.
+    mid = meeting_id or meta.get("id") or f"{d.parent.name}/{d.name}"
     try:
         store.set_status(mid, "processing")
 
@@ -157,11 +199,13 @@ def process_dir(d: Path, meeting_id: Optional[str] = None) -> dict:
         mic_segments = _transcribe_track(
             d / "mic.webm", "You", off,
             on_progress=lambda f: report(f * 0.5, "transcribing you"),
+            split_gap_ms=split_gap_ms,
         )
         report(0.5, "transcribing interviewer")
         tab_segments = _transcribe_track(
             d / "tab.webm", "Interviewer", 0.0,
             on_progress=lambda f: report(0.5 + f * 0.5, "transcribing interviewer"),
+            split_gap_ms=split_gap_ms,
         )
         report(1.0, "merging")
 

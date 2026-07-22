@@ -235,6 +235,22 @@ def transcript_txt_path(meeting_id: str) -> Path:
     return meeting_dir(meeting_id) / "transcript.txt"
 
 
+def delete_transcript(meeting_id: str) -> dict:
+    """Remove transcript.json/.txt and reset status to 'recorded'.
+
+    The mic/tab recordings are kept, so the meeting can be re-processed (e.g.
+    with a different split gap). Raises if there are no tracks to fall back on.
+    """
+    d = meeting_dir(meeting_id)
+    if not (d / "mic.webm").exists() and not (d / "tab.webm").exists():
+        raise FileNotFoundError(f"No recordings to keep in {d}")
+    (d / "transcript.json").unlink(missing_ok=True)
+    (d / "transcript.txt").unlink(missing_ok=True)
+    return update_meta(
+        meeting_id, status="recorded", progress=None, stage=None, error=None
+    )
+
+
 def reassign_company(meeting_id: str, new_company: str) -> dict:
     """Move the meeting folder under a new company dir; update meta.json."""
     new_company = _sanitize_company(new_company)

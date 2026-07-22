@@ -25,6 +25,15 @@ MODEL = os.environ.get("BUGBODIES_MODEL", "medium.en")
 DEVICE = os.environ.get("BUGBODIES_DEVICE", "cpu")
 COMPUTE_TYPE = os.environ.get("BUGBODIES_COMPUTE_TYPE", "int8")
 
+# Re-segmentation gap (ms). Each track is transcribed alone, so while one person
+# talks the other track is silence that VAD strips — Whisper then glues several
+# of a speaker's utterances into one segment with a single start time, which
+# breaks the timestamp-merge's interleaving. With word timestamps on, we split a
+# segment wherever the pause between two consecutive words is >= this many ms
+# (a long pause usually means the *other* person was talking). Lower = finer
+# back-and-forth; too low over-splits one person's natural pauses. 0 disables.
+SPLIT_GAP_MS = float(os.environ.get("BUGBODIES_SPLIT_GAP_MS", "700"))
+
 # CORS: unpacked extensions get a random id, so allow any chrome-extension
 # origin by default via a regex. Override with an explicit comma-separated list
 # in BUGBODIES_ORIGINS if you want to lock it down.
